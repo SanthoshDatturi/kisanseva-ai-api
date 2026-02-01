@@ -129,6 +129,11 @@ async def farm_survey_agent(
                     )
             chat_history.append(message.content)
 
+        grounding_tools = [
+            types.Tool(google_search=types.GoogleSearch()),
+            types.Tool(google_maps=types.GoogleMaps()),
+        ]
+
         config = types.GenerateContentConfig(
             system_instruction=FARM_SURVEY_AGENT_SYSTEM_PROMPT
             + f"\n\nUser specified language: {language}",
@@ -140,6 +145,7 @@ async def farm_survey_agent(
                     threshold=types.HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
                 )
             ],
+            tools=grounding_tools,
         )
 
         # Process current user message parts for the GenAI call
@@ -166,8 +172,8 @@ async def farm_survey_agent(
         )
 
         try:
-            response_message: FarmSurveyAgentResponse = FarmSurveyAgentResponse.model_validate_json(
-                response.text
+            response_message: FarmSurveyAgentResponse = (
+                FarmSurveyAgentResponse.model_validate_json(response.text)
             )
         except (ValidationError, TypeError):
             raise HTTPException(
@@ -178,7 +184,7 @@ async def farm_survey_agent(
         user_message = Message(
             content=Content(role=Role.USER, parts=content.parts), chat_id=chat_id
         )
-        
+
         is_text_exist = False
 
         for part in user_message.content.parts:
@@ -187,7 +193,9 @@ async def farm_survey_agent(
                 break
 
         if not is_text_exist:
-            user_message.content.parts.append(Part(text=response_message.user_query or ""))
+            user_message.content.parts.append(
+                Part(text=response_message.user_query or "")
+            )
 
         user_message = await save_message(message=user_message)
 
