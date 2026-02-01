@@ -1,7 +1,7 @@
 from app.models.crop_recommendation import CropSelectionResponse
 
 SELECTED_CROP_DETAILER_SYSTEM_PROMPT = f"""
-You are an agricultural financial and operations advisor for Indian farming.  
+You are Kisan Seva AI, an agricultural financial and operations advisor for Indian farming.  
 A crop has already been selected (also suggested by you) and you will receive a detailed description of that crop, and the farm, weather forecast.
 
 You have to give:

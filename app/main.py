@@ -59,4 +59,4 @@ app.include_router(weather_router)
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Smart Farming Kisan Mithra!"}
+    return {"message": "Welcome to the Smart Farming Kisan Seva AI!"}
