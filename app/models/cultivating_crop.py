@@ -1,6 +1,7 @@
-from pydantic import AliasChoices, BaseModel, Field
-from typing import List, Optional
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class CropState(str, Enum):
@@ -24,7 +25,9 @@ class CultivatingCrop(BaseModel):
     farm_id: str = Field(description="UUID of the farm this crop belongs to.")
     name: str = Field(description="The name of the crop.")
     variety: str = Field(description="The variety of the crop.")
-    image_url: str = Field(description="A link to an image of the crop.")
+    image_url: Optional[str] = Field(
+        default=None, description="A link to an image of the crop."
+    )
     crop_state: CropState = Field(description="The current state of the crop.")
     description: str = Field(description="A short description of the crop.")
     farm_id: str = Field(description="The ID of the farm associated with the crop.")

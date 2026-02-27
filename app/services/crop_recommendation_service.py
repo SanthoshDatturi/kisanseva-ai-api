@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import date, datetime
 
 from fastapi import HTTPException, status
 from langchain_core.prompts import ChatPromptTemplate
@@ -46,6 +47,20 @@ def _build_structured_chain(model, schema):
     return prompt | model.with_structured_output(schema, method="json_schema")
 
 
+def _crop_name_for_image_lookup(crop: MonoCrop) -> str:
+    if crop.crop_name_english and crop.crop_name_english.strip():
+        return crop.crop_name_english.strip()
+    return crop.crop_name
+
+
+def _is_recommendation_expired(
+    crop_recommendation_response: CropRecommendationResponse,
+) -> bool:
+    if crop_recommendation_response.expiration_date is None:
+        return False
+    return crop_recommendation_response.expiration_date < date.today()
+
+
 async def _populate_crop_image_urls(
     crop_recommendation_response: CropRecommendationResponse,
 ) -> None:
@@ -53,12 +68,14 @@ async def _populate_crop_image_urls(
 
     crop_names.extend(
         [
-            crop.image_url if crop.image_url else crop.crop_name
+            _crop_name_for_image_lookup(crop)
             for crop in crop_recommendation_response.mono_crops
         ]
     )
     for inter_crop in crop_recommendation_response.inter_crops:
-        crop_names.extend([crop.crop_name for crop in inter_crop.crops])
+        crop_names.extend(
+            [_crop_name_for_image_lookup(crop) for crop in inter_crop.crops]
+        )
 
     if not crop_names:
         return
@@ -67,19 +84,23 @@ async def _populate_crop_image_urls(
     crop_image_urls = await get_crop_image_urls_by_crop_names(unique_crop_names)
 
     for crop in crop_recommendation_response.mono_crops:
-        crop.image_url = crop_image_urls.get(crop.crop_name)
+        crop.image_url = crop_image_urls.get(_crop_name_for_image_lookup(crop))
 
     for inter_crop in crop_recommendation_response.inter_crops:
         for crop in inter_crop.crops:
-            crop.image_url = crop_image_urls.get(crop.crop_name)
+            crop.image_url = crop_image_urls.get(_crop_name_for_image_lookup(crop))
 
 
 async def crop_recommendation(
     farm_id: str, language: str
 ) -> CropRecommendationResponse:
     try:
-        prev_crop_recommendation = await get_crop_recommendation_from_farm_id(farm_id)
-        if prev_crop_recommendation:
+        prev_crop_recommendation = await get_crop_recommendation_from_farm_id(
+            farm_id, include_expired=True
+        )
+        if prev_crop_recommendation and not _is_recommendation_expired(
+            prev_crop_recommendation
+        ):
             await _populate_crop_image_urls(prev_crop_recommendation)
             return await save_crop_recommendation(prev_crop_recommendation)
 
@@ -130,7 +151,10 @@ async def crop_recommendation(
             }
         )
 
+        if prev_crop_recommendation:
+            crop_recommendation_response.id = prev_crop_recommendation.id
         crop_recommendation_response.farm_id = farm_id
+        crop_recommendation_response.timestamp = datetime.now()
         await save_crop_recommendation(crop_recommendation_response)
 
         try:

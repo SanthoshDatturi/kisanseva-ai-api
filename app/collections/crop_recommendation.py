@@ -1,6 +1,7 @@
-from typing import Union
+from datetime import date
+from typing import Optional, Union
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from app.core.mongodb import get_crop_recommendation_collection
@@ -11,13 +12,26 @@ from app.models.crop_recommendation import (
 )
 
 
+def _is_recommendation_expired(recommendation: CropRecommendationResponse) -> bool:
+    if recommendation.expiration_date is None:
+        return False
+    return recommendation.expiration_date < date.today()
+
+
 async def get_crop_recommendation_from_farm_id(
     farm_id: str,
-) -> CropRecommendationResponse:
+    include_expired: bool = False,
+) -> Optional[CropRecommendationResponse]:
     collection: AsyncIOMotorCollection = get_crop_recommendation_collection()
     try:
-        item = await collection.find_one({"farm_id": farm_id})
-        return CropRecommendationResponse.model_validate(item) if item else None
+        item = await collection.find_one({"farm_id": farm_id}, sort=[("timestamp", -1)])
+        if not item:
+            return None
+
+        recommendation = CropRecommendationResponse.model_validate(item)
+        if not include_expired and _is_recommendation_expired(recommendation):
+            return None
+        return recommendation
     except Exception as e:
         raise e
 
@@ -34,13 +48,20 @@ async def get_recommended_crop_from_id(
                 status_code=404, detail=f"Recommendation {recommendation_id} not found"
             )
 
-        for mono_crop in recommendation.get("mono_crops", []):
-            if mono_crop.get("_id") == crop_id or mono_crop.get("id") == crop_id:
-                return MonoCrop(**mono_crop)
+        recommendation_obj = CropRecommendationResponse.model_validate(recommendation)
+        if _is_recommendation_expired(recommendation_obj):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail=f"Recommendation {recommendation_id} has expired",
+            )
 
-        for inter_crop in recommendation.get("inter_crops", []):
-            if inter_crop.get("_id") == crop_id or inter_crop.get("id") == crop_id:
-                return InterCropRecommendation(**inter_crop)
+        for mono_crop in recommendation_obj.mono_crops:
+            if mono_crop.id == crop_id:
+                return mono_crop
+
+        for inter_crop in recommendation_obj.inter_crops:
+            if inter_crop.id == crop_id:
+                return inter_crop
 
         raise HTTPException(
             status_code=404,
@@ -62,7 +83,13 @@ async def get_recommendation_from_id(
             raise HTTPException(
                 status_code=404, detail=f"Recommendation {recommendation_id} not found"
             )
-        return CropRecommendationResponse.model_validate(response)
+        recommendation = CropRecommendationResponse.model_validate(response)
+        if _is_recommendation_expired(recommendation):
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail=f"Recommendation {recommendation_id} has expired",
+            )
+        return recommendation
     except HTTPException:
         raise
     except Exception as e:
