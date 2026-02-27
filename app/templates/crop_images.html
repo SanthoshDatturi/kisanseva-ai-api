@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Image Manager</title>
+    <link rel="stylesheet" href="/admin/theme.css">
+    <style>
+        :root {
+            --primary-color: #113624;
+            --secondary-color: #2f4b3e;
+            --accent-color: #2f8f56;
+            --accent-strong: #257246;
+            --danger-color: #c84231;
+            --bg-soft: #eef5ef;
+            --surface: #ffffff;
+            --surface-soft: #f7fbf8;
+            --border-color: #d7e2da;
+            --text-main: #1e2a24;
+            --text-muted: #5f6f67;
+            --shadow-sm: 0 3px 10px rgba(17, 54, 36, 0.08);
+            --shadow-md: 0 10px 30px rgba(17, 54, 36, 0.1);
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Trebuchet MS', Tahoma, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(circle at top, #f7fcf7 0%, #edf5ef 45%, #e8f1ea 100%);
+            color: var(--text-main);
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 2rem auto;
+            padding: 0 1.25rem 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+            background: linear-gradient(140deg, #143c29 0%, #245941 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 2rem 1.25rem;
+            box-shadow: var(--shadow-md);
+        }
+
+        h1 {
+            color: #ffffff;
+            margin: 0;
+            letter-spacing: 0.2px;
+            font-size: 2rem;
+        }
+
+        p.subtitle {
+            color: #d8e8de;
+            margin: 0.6rem 0 1.1rem;
+            font-size: 1rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: var(--shadow-sm);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-color), #61b47f);
+        }
+
+        .card-header {
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--bg-soft);
+            color: var(--primary-color);
+            font-size: 1.35rem;
+            letter-spacing: 0.15px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        input[type="text"], input[type="file"] {
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+            color: var(--text-main);
+        }
+
+        input[type="text"]:focus, input[type="file"]:focus {
+            border-color: var(--accent-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(47, 143, 86, 0.15);
+        }
+
+        .search-box input { flex: 1; }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-color), var(--accent-strong));
+            color: white;
+            box-shadow: 0 6px 18px rgba(37, 114, 70, 0.25);
+        }
+        .btn-primary:hover { transform: translateY(-1px); }
+
+        .btn-secondary { background-color: #3c5548; color: white; }
+        .btn-secondary:hover { background-color: #31473d; }
+
+        .btn-danger { background-color: var(--danger-color); color: white; padding: 0.5rem 1rem; }
+        .btn-danger:hover { background-color: #ac3325; }
+
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .image-card {
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+            transition: transform 0.2s;
+        }
+
+        .image-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(17, 54, 36, 0.12);
+        }
+
+        .image-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            display: block;
+            background-color: #eee;
+        }
+
+        .image-card .caption {
+            padding: 0.75rem;
+            font-size: 0.9rem;
+            text-align: center;
+            background: white;
+            border-top: 1px solid var(--bg-soft);
+            color: var(--text-muted);
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-end;
+            padding: 1.5rem;
+            background: var(--surface-soft);
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            border: 1px solid #e1ece4;
+        }
+
+        .form-row:hover {
+            border-color: #c5d9cc;
+        }
+
+        .form-group { flex: 1; }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+
+        .actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--bg-soft);
+        }
+
+        .actions button:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--secondary-color);
+            display: none;
+            font-style: italic;
+        }
+
+        .upload-indicator {
+            margin-top: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 6px;
+            border: 1px solid #d0e9dc;
+            background: #effaf3;
+            color: #1e7a45;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 0.65rem;
+        }
+
+        .upload-indicator.active {
+            display: inline-flex;
+        }
+
+        .upload-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #b8dec8;
+            border-top-color: #1e7a45;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-msg {
+            color: var(--danger-color);
+            margin-top: 0.5rem;
+            padding: 0.75rem;
+            background-color: #fff1f0;
+            border-radius: 8px;
+            display: none;
+            border: 1px solid #f3d1cd;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            max-width: 360px;
+        }
+
+        .toast {
+            display: none;
+            padding: 0.8rem 0.95rem;
+            border-radius: 10px;
+            border: 1px solid transparent;
+            box-shadow: var(--shadow-md);
+            font-weight: 600;
+            font-size: 0.95rem;
+            line-height: 1.35;
+        }
+
+        .toast.show {
+            display: block;
+            animation: toastIn 180ms ease-out;
+        }
+
+        .toast-success {
+            background: #ecf9f0;
+            color: #1f6e42;
+            border-color: #c7e9d2;
+        }
+
+        .toast-error {
+            background: #fff1f0;
+            color: #a83b2f;
+            border-color: #f3d1cd;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateY(-4px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .no-results {
+            grid-column: 1/-1;
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            background: var(--surface-soft);
+            border-radius: 8px;
+            border: 1px dashed #cddbd2;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 1rem auto;
+            }
+
+            .card {
+                padding: 1.25rem;
+            }
+
+            .search-box,
+            .form-row,
+            .actions {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toast-container" aria-live="polite" aria-atomic="true">
+        <div id="successToast" class="toast toast-success"></div>
+        <div id="errorToast" class="toast toast-error"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Crop Image Manager</h1>
+            <p class="subtitle">Admin tool for managing crop reference images</p>
+            <button class="btn-secondary" type="button" onclick="logout()">Logout</button>
+        </header>
+
+        <section class="card">
+            <h2 class="card-header">Search Existing Crops</h2>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Enter crop name to search (e.g., Wheat, Rice)..." onkeypress="handleEnter(event)">
+                <button class="btn-primary" onclick="searchCrops()">Search</button>
+            </div>
+            <div id="searchError" class="error-msg"></div>
+            <div id="loading" class="loading">Searching database...</div>
+            <div id="results" class="results-grid"></div>
+        </section>
+
+        <section class="card">
+            <h2 class="card-header">Upload New Images</h2>
+            <form id="uploadForm" enctype="multipart/form-data" onsubmit="uploadCrops(event)">
+                <input type="file" name="images" id="finalImageInput" multiple style="display: none;">
+                <div id="crop-list"></div>
+                <div id="uploadError" class="error-msg"></div>
+                <div id="uploadIndicator" class="upload-indicator" aria-live="polite">
+                    <span class="upload-spinner" aria-hidden="true"></span>
+                    <span id="uploadIndicatorText">Uploading images...</span>
+                </div>
+
+                <div class="actions">
+                    <button type="button" class="btn-secondary" id="selectImagesBtn" onclick="triggerFileSelect()">Select Images</button>
+                    <button type="submit" class="btn-primary" id="uploadSubmitBtn">Upload</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <script>
+        const ADMIN_TOKEN_KEY = 'admin_access_token';
+
+        function getAdminToken() {
+            return localStorage.getItem(ADMIN_TOKEN_KEY);
+        }
+
+        function ensureAuthenticated() {
+            if (!getAdminToken()) {
+                window.location.href = '/admin/login';
+                return false;
+            }
+            return true;
+        }
+
+        function authHeaders(baseHeaders = {}) {
+            const token = getAdminToken();
+            if (!token) {
+                window.location.href = '/admin/login';
+                throw new Error('Admin token missing');
+            }
+            return { ...baseHeaders, Authorization: `Bearer ${token}` };
+        }
+
+        function logout() {
+            localStorage.removeItem(ADMIN_TOKEN_KEY);
+            window.location.href = '/admin/login';
+        }
+
+        async function searchCrops() {
+            const query = document.getElementById('searchInput').value.trim();
+            const resultsDiv = document.getElementById('results');
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('searchError');
+
+            if (!query) {
+                errorDiv.textContent = 'Please enter a crop name';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            errorDiv.style.display = 'none';
+            resultsDiv.innerHTML = '';
+            loadingDiv.style.display = 'block';
+
+            try {
+                const response = await fetch(`/admin/crop-images?crop_name=${encodeURIComponent(query)}`, {
+                    headers: authHeaders(),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Error: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                loadingDiv.style.display = 'none';
+
+                if (!data.images || data.images.length === 0) {
+                    resultsDiv.innerHTML = `<div class="no-results">No images found for "${data.crop_name}"</div>`;
+                    return;
+                }
+
+                data.images.forEach(item => {
+                    const ref = item.image_url || item.blob_reference || item.url;
+                    if (!ref) return;
+
+                    const baseServiceUrl = String(data.service_url || '').replace(/\/+$/, '');
+                    const normalizedRef = String(ref).replace(/^\/+/, '');
+                    const url = `${baseServiceUrl}/${normalizedRef}`;
+
+                    const card = document.createElement('div');
+                    card.className = 'image-card';
+                    card.innerHTML = `
+                        <a href="${url}" target="_blank">
+                            <img src="${url}" alt="${item.crop_name || 'Crop image'}" loading="lazy">
+                        </a>
+                        <div class="caption">${item.crop_name || query}</div>
+                    `;
+                    resultsDiv.appendChild(card);
+                });
+            } catch (err) {
+                loadingDiv.style.display = 'none';
+                errorDiv.textContent = `Failed to fetch images: ${err.message}`;
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        function handleEnter(e) {
+            if (e.key === 'Enter') searchCrops();
+        }
+
+        async function uploadCrops(event) {
+            event.preventDefault();
+
+            const form = document.getElementById('uploadForm');
+            const uploadError = document.getElementById('uploadError');
+            uploadError.style.display = 'none';
+
+            if (!allFiles.length) {
+                uploadError.textContent = 'Please select at least one image.';
+                uploadError.style.display = 'block';
+                return;
+            }
+
+            setUploadState(true);
+            try {
+                const response = await fetch('/admin/crop-images', {
+                    method: 'POST',
+                    headers: authHeaders(),
+                    body: new FormData(form),
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || response.statusText);
+                }
+
+                allFiles = [];
+                document.getElementById('crop-list').innerHTML = '';
+                updateFileInput();
+                showToast('success', 'Crop images uploaded successfully.');
+            } catch (err) {
+                uploadError.textContent = `Upload failed: ${err.message}`;
+                uploadError.style.display = 'block';
+                showToast('error', `Upload failed: ${err.message}`);
+            } finally {
+                setUploadState(false);
+            }
+        }
+
+        let allFiles = [];
+
+        function triggerFileSelect() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = 'image/*';
+            input.onchange = function(e) {
+                const files = Array.from(e.target.files);
+                files.forEach(file => {
+                    const id = Math.random().toString(36).slice(2, 11);
+                    allFiles.push({ id, file });
+                    addCropRow(file, id);
+                });
+                updateFileInput();
+            };
+            input.click();
+        }
+
+        function addCropRow(file, id) {
+            const container = document.getElementById('crop-list');
+            const row = document.createElement('div');
+            row.className = 'form-row';
+            row.dataset.fileId = id;
+
+            const name = file.name.replace(/\.[^/.]+$/, '');
+
+            row.innerHTML = `
+                <div class="form-group">
+                    <label>Crop Name</label>
+                    <input type="text" name="crop_names" required value="${name}">
+                </div>
+                <div class="form-group">
+                    <label>Image File</label>
+                    <div style="padding: 0.75rem; background: #fff; border: 1px solid #dee2e6; border-radius: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${file.name}
+                    </div>
+                </div>
+                <button type="button" class="btn-danger" onclick="removeRow('${id}')" title="Remove row">X</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function removeRow(fileId) {
+            allFiles = allFiles.filter(item => item.id !== fileId);
+            const row = document.querySelector(`div[data-file-id="${fileId}"]`);
+            if (row) row.remove();
+            updateFileInput();
+        }
+
+        function updateFileInput() {
+            const dt = new DataTransfer();
+            allFiles.forEach(item => dt.items.add(item.file));
+            document.getElementById('finalImageInput').files = dt.files;
+        }
+
+        function setUploadState(isUploading) {
+            const indicator = document.getElementById('uploadIndicator');
+            const indicatorText = document.getElementById('uploadIndicatorText');
+            const selectBtn = document.getElementById('selectImagesBtn');
+            const uploadBtn = document.getElementById('uploadSubmitBtn');
+            const text = isUploading
+                ? `Uploading ${allFiles.length} image${allFiles.length === 1 ? '' : 's'}...`
+                : 'Uploading images...';
+
+            indicatorText.textContent = text;
+            indicator.classList.toggle('active', isUploading);
+            selectBtn.disabled = isUploading;
+            uploadBtn.disabled = isUploading;
+            uploadBtn.textContent = isUploading ? 'Uploading...' : 'Upload';
+        }
+
+        let toastTimer = null;
+        function showToast(type, message) {
+            const successToast = document.getElementById('successToast');
+            const errorToast = document.getElementById('errorToast');
+            const activeToast = type === 'success' ? successToast : errorToast;
+            const inactiveToast = type === 'success' ? errorToast : successToast;
+
+            inactiveToast.classList.remove('show');
+            activeToast.textContent = message;
+            activeToast.classList.add('show');
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                activeToast.classList.remove('show');
+            }, 3500);
+        }
+
+        ensureAuthenticated();
+    </script>
+</body>
+</html>

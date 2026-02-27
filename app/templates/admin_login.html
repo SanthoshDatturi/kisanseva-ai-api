@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login</title>
+    <link rel="stylesheet" href="/admin/theme.css">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+
+        .login-shell {
+            width: min(480px, 100%);
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+        }
+
+        .hero {
+            background: linear-gradient(140deg, #143c29 0%, #245941 100%);
+            padding: 1.5rem;
+            color: #fff;
+        }
+
+        .hero h1 {
+            margin: 0;
+            font-size: 1.6rem;
+            letter-spacing: 0.2px;
+        }
+
+        .hero p {
+            margin: 0.55rem 0 0;
+            color: #d8e8de;
+            font-size: 0.95rem;
+        }
+
+        .card {
+            padding: 1.4rem;
+        }
+
+        label {
+            display: block;
+            margin: 0.9rem 0 0.4rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--secondary-color);
+        }
+
+        input {
+            width: 100%;
+        }
+
+        .btn-block {
+            width: 100%;
+            margin-top: 0.95rem;
+            padding: 0.78rem 1rem;
+        }
+
+        .message {
+            margin-top: 1rem;
+            font-size: 0.92rem;
+            display: none;
+            padding: 0.75rem;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .message.error {
+            display: block;
+            color: var(--danger-color);
+            background: #fff1f0;
+            border: 1px solid #f3d1cd;
+        }
+
+        .message.success {
+            display: block;
+            color: #1f6e42;
+            background: #ecf9f0;
+            border: 1px solid #c7e9d2;
+        }
+
+        .divider {
+            margin: 1.1rem 0 0.2rem;
+            border-top: 1px solid var(--bg-soft);
+        }
+
+        @media (max-width: 480px) {
+            .hero {
+                padding: 1.2rem;
+            }
+
+            .hero h1 {
+                font-size: 1.38rem;
+            }
+
+            .card {
+                padding: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-shell">
+        <div class="hero">
+            <h1>Admin Login</h1>
+            <p>Sign in with OTP to access crop image management.</p>
+        </div>
+        <div class="card">
+            <label for="phone">Phone</label>
+            <input id="phone" type="text" placeholder="Enter phone number" autocomplete="tel" />
+            <button id="sendOtpBtn" type="button" class="btn-secondary btn-block" onclick="sendOtp()">Send OTP</button>
+
+            <div class="divider"></div>
+
+            <label for="otp">OTP</label>
+            <input id="otp" type="text" placeholder="Enter OTP" autocomplete="one-time-code" />
+            <button id="verifyOtpBtn" type="button" class="btn-primary btn-block" onclick="verifyOtp()">Verify and Continue</button>
+
+            <div id="message" class="message"></div>
+        </div>
+    </div>
+
+    <script>
+        const ADMIN_TOKEN_KEY = 'admin_access_token';
+
+        function setMessage(text, isError = true) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = `message ${isError ? 'error' : 'success'}`;
+        }
+
+        function clearMessage() {
+            const message = document.getElementById('message');
+            message.textContent = '';
+            message.className = 'message';
+        }
+
+        async function sendOtp() {
+            clearMessage();
+            const sendOtpBtn = document.getElementById('sendOtpBtn');
+            const phone = document.getElementById('phone').value.trim();
+
+            if (!phone) {
+                setMessage('Phone number is required.');
+                return;
+            }
+
+            try {
+                sendOtpBtn.disabled = true;
+                sendOtpBtn.textContent = 'Sending OTP...';
+                const response = await fetch('/auth/send-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone }),
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.detail || 'Failed to send OTP.');
+                }
+
+                setMessage(payload.message || 'OTP sent successfully.', false);
+            } catch (err) {
+                setMessage(err.message || 'Failed to send OTP.');
+            } finally {
+                sendOtpBtn.disabled = false;
+                sendOtpBtn.textContent = 'Send OTP';
+            }
+        }
+
+        async function verifyOtp() {
+            clearMessage();
+            const verifyOtpBtn = document.getElementById('verifyOtpBtn');
+            const phone = document.getElementById('phone').value.trim();
+            const otp = document.getElementById('otp').value.trim();
+
+            if (!phone || !otp) {
+                setMessage('Phone and OTP are required.');
+                return;
+            }
+
+            try {
+                verifyOtpBtn.disabled = true;
+                verifyOtpBtn.textContent = 'Verifying...';
+                const response = await fetch('/auth/verify-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, otp }),
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.detail || 'OTP verification failed.');
+                }
+
+                if (!payload.user || payload.user.role !== 'admin') {
+                    throw new Error('Only admin users can access this page.');
+                }
+
+                localStorage.setItem(ADMIN_TOKEN_KEY, payload.access_token);
+                window.location.href = '/admin/handle-crop-images';
+            } catch (err) {
+                localStorage.removeItem(ADMIN_TOKEN_KEY);
+                setMessage(err.message || 'OTP verification failed.');
+            } finally {
+                verifyOtpBtn.disabled = false;
+                verifyOtpBtn.textContent = 'Verify and Continue';
+            }
+        }
+    </script>
+</body>
+</html>

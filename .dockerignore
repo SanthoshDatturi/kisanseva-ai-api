@@ -1,0 +1,27 @@
+.git
+README.md
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+
+# IDE specific files
+.vscode/
+.idea/
+*.iml
+
+.ruff_cache/
+
+# Temporary folders
+tests/
+.pytest_cache/
+.mypy_cache/
+.cache/
+thoughts/
+grounding_metadata/
