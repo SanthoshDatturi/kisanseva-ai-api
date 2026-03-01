@@ -39,6 +39,41 @@ class RiskFactor(BaseModel):
     mitigation: str = Field(description="Simple prevention tip")
 
 
+class CheckResult(str, Enum):
+    PASS = "pass"
+    CAUTION = "caution"
+    FAIL = "fail"
+
+
+class CrossVerificationCheck(BaseModel):
+    check_name: str = Field(
+        description="Cross-verification label such as weather_x_crops or soil_x_crops."
+    )
+    result: CheckResult = Field(description="Outcome of the cross-verification check.")
+    summary: str = Field(description="Short summary of the validation result.")
+
+
+class CropRecommendationReasoningReport(BaseModel):
+    weather_report: str = Field(
+        description="Short weather assessment for the farm location and season."
+    )
+    water_report: str = Field(
+        description="Water availability and irrigation reliability summary."
+    )
+    soil_report: str = Field(
+        description="Soil suitability and nutrient status summary for recommended crops."
+    )
+    farm_resource_report: str = Field(
+        description="Overall report on farm resources, constraints, and opportunities."
+    )
+    cross_verification_checks: List[CrossVerificationCheck] = Field(
+        description="Matrix-style checks across weather, water, soil, crop, and risk."
+    )
+    date_validity_report: str = Field(
+        description="Confirmation that recommended dates align with local seasonal reality."
+    )
+
+
 class MonoCrop(BaseModel):
     """Describes a single crop recommendation."""
 
@@ -157,6 +192,25 @@ class CropRecommendationResponse(BaseModel):
     inter_crops: List[InterCropRecommendation] = Field(
         description="A list of crop recommendations for intercropping systems 2 items."
     )
+    reasoning_report: Optional[CropRecommendationReasoningReport] = Field(
+        default=None,
+        description="Reasoning summary showing farm-resource checks and date validation.",
+    )
+
+
+class CropSelectionReasoningReport(BaseModel):
+    weather_alignment_report: str = Field(
+        description="How weather and season support planned crop operations."
+    )
+    investment_grounding_report: str = Field(
+        description="How investment estimates are grounded to local market costs."
+    )
+    soil_health_need_report: str = Field(
+        description="Nutrient-gap based soil health actions required for this crop."
+    )
+    date_validity_report: str = Field(
+        description="How schedule dates are validated against climate and current date."
+    )
 
 
 class CropSelectionResponse(BaseModel):
@@ -174,3 +228,38 @@ class CropSelectionResponse(BaseModel):
     soil_health_recommendations: SoilHealthRecommendations = Field(
         description="Soil health recommendations for the selected crop/intercrop."
     )
+    reasoning_report: Optional[CropSelectionReasoningReport] = Field(
+        default=None,
+        description="Reasoning summary for date, cost, weather, and soil suitability checks.",
+    )
+
+
+class CropRecommendationComponentType(str, Enum):
+    REASONING = "reasoning"
+    MONO_CROP = "mono_crop"
+    INTER_CROP = "inter_crop"
+    INTER_CROP_MONO_CROP = "inter_crop_mono_crop"
+
+
+class CropRecommendationComponent(BaseModel):
+    id: str = Field(
+        default_factory=lambda: uuid4().hex,
+        validation_alias=AliasChoices("id", "_id"),
+        serialization_alias="_id",
+    )
+    recommendation_id: str = Field(
+        description="Parent crop recommendation response id."
+    )
+    farm_id: str = Field(description="Farm id for this component.")
+    component_type: CropRecommendationComponentType
+    order: int = Field(
+        default=0,
+        description="Ordering index to reconstruct final recommendation deterministically.",
+    )
+    inter_crop_id: Optional[str] = Field(
+        default=None,
+        description="Parent inter-crop id for inter_crop_mono_crop component type.",
+    )
+    mono_crop: Optional[MonoCrop] = Field(default=None)
+    inter_crop: Optional[InterCropRecommendation] = Field(default=None)
+    reasoning_report: Optional[CropRecommendationReasoningReport] = Field(default=None)

@@ -21,6 +21,14 @@ class FarmSurveyAgentResponse(GeneralChatModelResponse):
         default=None,
         description="Farm profile with same details as english version but the values are should be in user specific language.",
     )
+    collected_fields: Optional[list[str]] = Field(
+        default=None,
+        description="List of farm profile fields already collected in conversation state.",
+    )
+    missing_fields: Optional[list[str]] = Field(
+        default=None,
+        description="List of still-missing farm profile fields before exit.",
+    )
 
 class FarmSurveyAgentMappedResponse(GeneralChatResponse):
     farm_profile: Optional[FarmProfile] = Field(default=None)

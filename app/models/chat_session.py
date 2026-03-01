@@ -121,6 +121,14 @@ class MessageContent(BaseModel):
 
 
 class GeneralChatModelResponse(BaseModel):
+    user_intent: Optional[str] = Field(
+        default=None,
+        description="Short normalized intent summary inferred from user message.",
+    )
+    response_plan: Optional[list[str]] = Field(
+        default=None,
+        description="Small list of reasoning steps used to answer the user.",
+    )
     command: Command = Field(
         description="Command for the app to decide the next action."
     )

@@ -83,3 +83,19 @@ def get_pesticide_recommendation_collection() -> AsyncIOMotorCollection:
 
 def get_crop_image_collection() -> AsyncIOMotorCollection:
     return _get_collection("crop_images")
+
+
+def get_ai_workflow_collection() -> AsyncIOMotorCollection:
+    return _get_collection("ai_workflow")
+
+
+def get_ai_workflow_event_collection() -> AsyncIOMotorCollection:
+    return _get_collection("ai_workflow_event")
+
+
+def get_crop_recommendation_component_collection() -> AsyncIOMotorCollection:
+    return _get_collection("crop_recommendation_component")
+
+
+def get_pesticide_recommendation_component_collection() -> AsyncIOMotorCollection:
+    return _get_collection("pesticide_recommendation_component")

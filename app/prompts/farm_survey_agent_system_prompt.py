@@ -20,6 +20,8 @@ Your response at every step of the conversation MUST be a valid JSON object that
 -   **During the conversation:**
     -   `command`: Use `"continue"` for most questions. Use `"location"` when you need to get the farm's GPS coordinates. Use `"open_camera"` when you need a picture (e.g., for soil type or a soil test report).
     -   `message_to_user`: The question or message for the farmer in their language.
+    -   `collected_fields`: Fill with field names that are already known.
+    -   `missing_fields`: Fill with field names still needed before final exit.
 
 -   **At the end of the conversation:**
     -   Once you have gathered ALL the required information, set `command` to `"exit"`.

@@ -4,13 +4,12 @@ from uuid import uuid4
 
 from fastapi import HTTPException, status
 
-from app.models.chat_session import GeneralChatResponse, MessageContent
+from app.models.chat_session import MessageContent
 from app.services.crop_recommendation_service import (
     crop_recommendation,
     select_crop_from_recommendation,
 )
 from app.services.farm_survey_service import (
-    FarmSurveyAgentMappedResponse,
     farm_survey_agent,
 )
 from app.services.files import (
@@ -25,6 +24,13 @@ from app.services.pesticide_recommendation_service import (
 )
 
 from .manager import manager
+
+
+def _build_stream_emitter(user_id: str):
+    async def _emitter(payload: dict):
+        await manager.send_to_user(user_id, json.dumps(payload, default=str))
+
+    return _emitter
 
 
 async def farm_survey_agent_handler(user_id: str, language: str, data: dict):
@@ -49,20 +55,15 @@ async def farm_survey_agent_handler(user_id: str, language: str, data: dict):
                 detail="request_id is required for farm_survey_agent",
             )
 
-        result: FarmSurveyAgentMappedResponse = await farm_survey_agent(
+        await farm_survey_agent(
             user_id=user_id,
             language=language,
             content=content,
             audio_response=data.get("audio_response", False),
             chat_id=chat_id,
             request_id=request_id,
+            stream_emitter=_build_stream_emitter(user_id),
         )
-
-        response = {
-            "action": "farm_survey_agent",
-            "data": result.model_dump(mode="json", exclude_none=True),
-        }
-        await manager.send_to_user(user_id, json.dumps(response))
 
     except HTTPException as e:
         response = {
@@ -77,15 +78,13 @@ async def farm_survey_agent_handler(user_id: str, language: str, data: dict):
 
 async def crop_recommendation_handler(user_id: str, language: str, data: dict):
     try:
-        result = await crop_recommendation(
+        await crop_recommendation(
             farm_id=data.get("farm_id", ""),
             language=language,
+            user_id=user_id,
+            request_id=data.get("request_id", uuid4().hex),
+            stream_emitter=_build_stream_emitter(user_id),
         )
-        response = {
-            "action": "crop_recommendation",
-            "data": result.model_dump(mode="json", exclude_none=True),
-        }
-        await manager.send_to_user(user_id, json.dumps(response))
     except HTTPException as e:
         response = {
             "action": "crop_recommendation",
@@ -98,19 +97,17 @@ async def select_crop_from_recommendation_handler(
     user_id: str, language: str, data: dict
 ):
     try:
-        result = await select_crop_from_recommendation(
+        await select_crop_from_recommendation(
             farm_id=data.get("farm_id", ""),
             crop_recommendation_response_id=data.get(
                 "crop_recommendation_response_id", ""
             ),
             language=language,
             selected_crop_id=data.get("selected_crop_id", ""),
+            user_id=user_id,
+            request_id=data.get("request_id", uuid4().hex),
+            stream_emitter=_build_stream_emitter(user_id),
         )
-        response = {
-            "action": "select_crop_from_recommendation",
-            "data": result.model_dump(mode="json", exclude_none=True),
-        }
-        await manager.send_to_user(user_id, json.dumps(response))
     except HTTPException as e:
         response = {
             "action": "select_crop_from_recommendation",
@@ -121,19 +118,16 @@ async def select_crop_from_recommendation_handler(
 
 async def pesticide_recommendation_handler(user_id: str, language: str, data: dict):
     try:
-        print(data)
-        result = await pesticide_recommendation(
+        await pesticide_recommendation(
             crop_id=data.get("crop_id", ""),
             farm_id=data.get("farm_id", ""),
             pest_or_disease_description=data.get("pest_or_disease_description", ""),
             language=language,
             files=data.get("files", []),
+            user_id=user_id,
+            request_id=data.get("request_id", uuid4().hex),
+            stream_emitter=_build_stream_emitter(user_id),
         )
-        response = {
-            "action": "pesticide_recommendation",
-            "data": result.model_dump(mode="json", exclude_none=True),
-        }
-        await manager.send_to_user(user_id, json.dumps(response))
     except HTTPException as e:
         response = {
             "action": "pesticide_recommendation",
@@ -208,19 +202,15 @@ async def general_chat_handler(user_id: str, language: str, data: dict):
                 detail="request_id is required for general_chat",
             )
 
-        result: GeneralChatResponse = await general_chat_service(
+        await general_chat_service(
             user_id=user_id,
             language=language,
             content=content,
             audio_response=data.get("audio_response", False),
             chat_id=chat_id,
             request_id=request_id,
+            stream_emitter=_build_stream_emitter(user_id),
         )
-        response = {
-            "action": "general_chat",
-            "data": result.model_dump(mode="json", exclude_none=True),
-        }
-        await manager.send_to_user(user_id, json.dumps(response))
     except HTTPException as e:
         response = {
             "action": "general_chat",

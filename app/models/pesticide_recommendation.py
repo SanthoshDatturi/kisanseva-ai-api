@@ -50,6 +50,19 @@ class PesticideInfo(BaseModel):
     )
 
 
+class PesticideDiagnosticReport(BaseModel):
+    likely_issue: str = Field(
+        description="Most likely pest or disease identified from symptoms/images."
+    )
+    confidence: float = Field(ge=0, le=1, description="Confidence score between 0 and 1.")
+    key_observations: List[str] = Field(
+        description="Short list of observations supporting the diagnosis."
+    )
+    alternatives_considered: List[str] = Field(
+        description="Optional differential diagnoses that were considered."
+    )
+
+
 class PesticideRecommendationResponse(BaseModel):
     id: str = Field(
         default_factory=lambda: uuid4().hex,
@@ -70,6 +83,10 @@ class PesticideRecommendationResponse(BaseModel):
         default_factory=lambda: datetime.now().timestamp(),
     )
     disease_details: str = Field(description="Details about the disease.")
+    diagnostic_report: Optional[PesticideDiagnosticReport] = Field(
+        default=None,
+        description="Structured diagnosis details before treatment recommendations.",
+    )
     recommendations: List[PesticideInfo] = Field(
         ...,
         description="List of pesticide recommendations. One for each Pesticide Type (if any type not present give only the type that present).",
@@ -90,3 +107,23 @@ class PesticideRecommendationError(BaseModel):
             " disease properly you can ask to upload again clearly or change the angle"
         )
     )
+
+
+class PesticideRecommendationComponentType(str, Enum):
+    DIAGNOSTIC = "diagnostic"
+    RECOMMENDATION_ITEM = "recommendation_item"
+
+
+class PesticideRecommendationComponent(BaseModel):
+    id: str = Field(
+        default_factory=lambda: uuid4().hex,
+        validation_alias=AliasChoices("id", "_id"),
+        serialization_alias="_id",
+    )
+    recommendation_id: str
+    farm_id: str
+    crop_id: str
+    component_type: PesticideRecommendationComponentType
+    order: int = Field(default=0)
+    diagnostic_report: Optional[PesticideDiagnosticReport] = Field(default=None)
+    recommendation: Optional[PesticideInfo] = Field(default=None)
