@@ -42,6 +42,12 @@ async def farm_survey_agent_handler(user_id: str, language: str, data: dict):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="chat_id is required for farm_survey_agent",
             )
+        request_id = data.get("request_id")
+        if not request_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="request_id is required for farm_survey_agent",
+            )
 
         result: FarmSurveyAgentMappedResponse = await farm_survey_agent(
             user_id=user_id,
@@ -49,6 +55,7 @@ async def farm_survey_agent_handler(user_id: str, language: str, data: dict):
             content=content,
             audio_response=data.get("audio_response", False),
             chat_id=chat_id,
+            request_id=request_id,
         )
 
         response = {
@@ -194,6 +201,12 @@ async def general_chat_handler(user_id: str, language: str, data: dict):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="chat_id is required for general_chat",
             )
+        request_id = data.get("request_id")
+        if not request_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="request_id is required for general_chat",
+            )
 
         result: GeneralChatResponse = await general_chat_service(
             user_id=user_id,
@@ -201,6 +214,7 @@ async def general_chat_handler(user_id: str, language: str, data: dict):
             content=content,
             audio_response=data.get("audio_response", False),
             chat_id=chat_id,
+            request_id=request_id,
         )
         response = {
             "action": "general_chat",

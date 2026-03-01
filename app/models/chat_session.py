@@ -38,6 +38,7 @@ class ChatSession(BaseModel):
     user_id: str = Field(...)
     chat_type: ChatType = Field(description="Type of chat session")
     data_id: Optional[str] = Field(default=None)
+    title: Optional[str] = Field(default=None)
     ts: float = Field(default_factory=lambda: datetime.now().timestamp())
 
 
@@ -48,6 +49,7 @@ class Message(BaseModel):
         serialization_alias="_id",
     )
     chat_id: str = Field(...)
+    request_id: str = Field(...)
     content: "MessageContent" = Field(
         ...,
         description="Provider-agnostic content format with text/media parts.",
