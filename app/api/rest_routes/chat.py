@@ -46,10 +46,6 @@ async def create_chat_session(
 
 @router.get("/", response_model=List[ChatSession], response_model_exclude_none=True)
 async def get_user_chat_sessions(
-    timestamp: Optional[float] = Query(
-        default=None,
-        description="Filter sessions updated after this timestamp (Unix seconds)",
-    ),
     user_payload: dict = Depends(verify_jwt),
 ):
     """
@@ -61,7 +57,7 @@ async def get_user_chat_sessions(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
         )
-    chat_sessions = await get_chat_sessions_from_user_id(user_id, ts=timestamp)
+    chat_sessions = await get_chat_sessions_from_user_id(user_id)
     return chat_sessions
 
 

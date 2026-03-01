@@ -11,14 +11,10 @@ from app.models.chat_session import ChatSession, Message
 from app.services.files import FileType, delete_multiple_files
 
 
-async def get_chat_sessions_from_user_id(
-    user_id: str, ts: Optional[float] = None
-) -> List[ChatSession]:
+async def get_chat_sessions_from_user_id(user_id: str) -> List[ChatSession]:
     chat_collection: AsyncIOMotorCollection = get_chat_session_collection()
     try:
         query = {"user_id": user_id}
-        if ts:
-            query["ts"] = {"$gt": ts}
 
         chats = chat_collection.find(query)
         return [ChatSession.model_validate(chat) async for chat in chats]
