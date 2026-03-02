@@ -3,7 +3,7 @@ from enum import Enum
 from typing import List, Optional
 from uuid import uuid4
 
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 class PesticideStage(str, Enum):
@@ -49,6 +49,24 @@ class PesticideInfo(BaseModel):
         default=None, description="The date when the pesticide was applied."
     )
 
+    @field_validator("pesticide_type", mode="before")
+    @classmethod
+    def _normalize_pesticide_type(cls, value):
+        if isinstance(value, PesticideType):
+            return value
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip().lower().replace("-", "_").replace(" ", "_")
+        aliases = {
+            "bio": "biological",
+            "bio_control": "biological",
+            "biocontrol": "biological",
+            "organic_based": "organic",
+            "chemical_based": "chemical",
+        }
+        return aliases.get(normalized, normalized)
+
 
 class PesticideDiagnosticReport(BaseModel):
     likely_issue: str = Field(
@@ -59,6 +77,7 @@ class PesticideDiagnosticReport(BaseModel):
         description="Short list of observations supporting the diagnosis."
     )
     alternatives_considered: List[str] = Field(
+        default_factory=list,
         description="Optional differential diagnoses that were considered."
     )
 
