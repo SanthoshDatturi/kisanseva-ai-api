@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 
 from app.collections.crop_images import get_crop_images_by_name
 from app.core.security import verify_admin
@@ -18,12 +18,6 @@ async def admin_login():
         Path(__file__).parent.parent.parent / "templates" / "admin_login.html"
     )
     return HTMLResponse(content=template_path.read_text(encoding="utf-8"))
-
-
-@router.get("/theme.css")
-async def admin_theme_css():
-    css_path = Path(__file__).parent.parent.parent / "templates" / "admin_theme.css"
-    return Response(content=css_path.read_text(encoding="utf-8"), media_type="text/css")
 
 
 @router.get("/handle-crop-images")

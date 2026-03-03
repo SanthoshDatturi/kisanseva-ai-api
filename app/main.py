@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
+from fastapi.responses import HTMLResponse
 
 from app.api.rest_routes.admin import router as admin_router
 from app.api.rest_routes.auth import router as auth_router
@@ -33,6 +35,7 @@ from app.api.websocket.endpoints import router as websocket_router
 from app.core.mongodb import close_mongo_client, init_mongo_client
 
 load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent
 
 
 @asynccontextmanager
@@ -59,6 +62,13 @@ app.include_router(weather_router)
 app.include_router(admin_router)
 
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    return {"message": "Welcome to the Smart Farming Kisan Seva AI!"}
+    template_path = BASE_DIR / "templates" / "home.html"
+    return template_path.read_text(encoding="utf-8")
+
+
+@app.get("/theme.css")
+async def admin_theme_css():
+    css_path = BASE_DIR / "templates" / "theme.css"
+    return Response(content=css_path.read_text(encoding="utf-8"), media_type="text/css")

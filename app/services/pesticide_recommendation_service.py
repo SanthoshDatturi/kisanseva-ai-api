@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime
-from typing import List, Literal, Optional, Union
+from typing import Any, List, Literal, Optional, Union
 
 from fastapi import HTTPException, status
 from langchain_core.messages import HumanMessage
@@ -26,6 +26,7 @@ from app.models.pesticide_recommendation import (
     PesticideRecommendationComponentType,
     PesticideRecommendationError,
     PesticideRecommendationResponse,
+    PesticideType,
     PesticideStage,
 )
 from app.prompts.pesticide_recommendation_system_prompt import (
@@ -86,6 +87,65 @@ class PesticideRecommendationEnvelope(BaseModel):
                 values["error"] = error_payload
 
         return values
+
+
+def _extract_json_object_from_text(text: str) -> Optional[dict[str, Any]]:
+    stripped = text.strip()
+    if not stripped:
+        return None
+
+    # Common LLM behavior: wrap json inside markdown fences.
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if len(lines) >= 3:
+            stripped = "\n".join(lines[1:-1]).strip()
+
+    try:
+        parsed = json.loads(stripped)
+        return parsed if isinstance(parsed, dict) else None
+    except Exception:
+        return None
+
+
+def _coerce_envelope(
+    raw_output: Any,
+) -> PesticideRecommendationEnvelope:
+    if isinstance(raw_output, PesticideRecommendationEnvelope):
+        return raw_output
+
+    if isinstance(raw_output, dict):
+        return PesticideRecommendationEnvelope.model_validate(raw_output)
+
+    if isinstance(raw_output, str):
+        parsed = _extract_json_object_from_text(raw_output)
+        if parsed is not None:
+            return PesticideRecommendationEnvelope.model_validate(parsed)
+
+    # Some providers may return an AIMessage-like object with `content`.
+    content = getattr(raw_output, "content", None)
+    if isinstance(content, str):
+        parsed = _extract_json_object_from_text(content)
+        if parsed is not None:
+            return PesticideRecommendationEnvelope.model_validate(parsed)
+    elif isinstance(content, list):
+        text_blocks: List[str] = []
+        for block in content:
+            if isinstance(block, dict):
+                text_value = block.get("text")
+                if isinstance(text_value, str) and text_value.strip():
+                    text_blocks.append(text_value)
+            elif isinstance(block, str) and block.strip():
+                text_blocks.append(block)
+
+        combined_text = "\n".join(text_blocks).strip()
+        if combined_text:
+            parsed = _extract_json_object_from_text(combined_text)
+            if parsed is not None:
+                return PesticideRecommendationEnvelope.model_validate(parsed)
+
+    raise ValueError(
+        f"Unsupported pesticide model response type: {type(raw_output).__name__}"
+    )
 
 
 async def _cleanup_pesticide_input_blobs(file_references: List[str]) -> None:
@@ -194,20 +254,33 @@ async def pesticide_recommendation(
             .with_structured_output(PesticideRecommendationEnvelope, method="json_schema")
         )
         try:
-            envelope: PesticideRecommendationEnvelope = await model.ainvoke(messages)
+            raw_output = await model.ainvoke(messages)
+            envelope = _coerce_envelope(raw_output)
         except Exception as model_exc:
             logger.exception(
                 "Pesticide recommendation model invocation failed for crop_id=%s farm_id=%s",
                 crop_id,
                 farm_id,
             )
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=(
-                    "AI model could not generate pesticide recommendation. "
-                    "Please retry with a clearer crop image and short symptom description."
-                ),
-            ) from model_exc
+            try:
+                # Fallback: ask the same model without structured-output wrapper and
+                # coerce JSON payload from returned text/content.
+                fallback_model = get_chat_model(model="gemini-2.5-flash")
+                fallback_raw_output = await fallback_model.ainvoke(messages)
+                envelope = _coerce_envelope(fallback_raw_output)
+            except Exception as fallback_exc:
+                logger.exception(
+                    "Pesticide recommendation fallback model invocation failed for crop_id=%s farm_id=%s",
+                    crop_id,
+                    farm_id,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=(
+                        "AI model could not generate pesticide recommendation. "
+                        "Please retry with a clearer crop image and short symptom description."
+                    ),
+                ) from fallback_exc
 
         if envelope.result_type == "success":
             recommendation_response = envelope.success
@@ -234,52 +307,92 @@ async def pesticide_recommendation(
             )
 
             await workflow.start_step("persist_recommendation_components")
-            await delete_pesticide_recommendation_components(recommendation_response.id)
+            component_persist_warnings: List[str] = []
+            try:
+                await delete_pesticide_recommendation_components(
+                    recommendation_response.id
+                )
+            except Exception as exc:
+                logger.exception(
+                    "Failed deleting previous pesticide components for recommendation_id=%s",
+                    recommendation_response.id,
+                )
+                component_persist_warnings.append(f"delete_previous_failed: {exc}")
 
             if recommendation_response.diagnostic_report is not None:
-                await save_pesticide_recommendation_component(
-                    PesticideRecommendationComponent(
-                        recommendation_id=recommendation_response.id,
-                        farm_id=farm_id,
-                        crop_id=crop_id,
-                        component_type=PesticideRecommendationComponentType.DIAGNOSTIC,
-                        order=0,
-                        diagnostic_report=recommendation_response.diagnostic_report,
+                try:
+                    await save_pesticide_recommendation_component(
+                        PesticideRecommendationComponent(
+                            recommendation_id=recommendation_response.id,
+                            farm_id=farm_id,
+                            crop_id=crop_id,
+                            component_type=PesticideRecommendationComponentType.DIAGNOSTIC,
+                            order=0,
+                            diagnostic_report=recommendation_response.diagnostic_report,
+                        )
                     )
-                )
-                await workflow.emit_chunk(
-                    step="persist_recommendation_components",
-                    chunk_type="diagnostic_ready",
-                    data=recommendation_response.diagnostic_report.model_dump(
-                        mode="json", exclude_none=True
-                    ),
-                )
+                    await workflow.emit_chunk(
+                        step="persist_recommendation_components",
+                        chunk_type="diagnostic_ready",
+                        data=recommendation_response.diagnostic_report.model_dump(
+                            mode="json", exclude_none=True
+                        ),
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Failed persisting diagnostic component for recommendation_id=%s",
+                        recommendation_response.id,
+                    )
+                    component_persist_warnings.append(f"diagnostic_persist_failed: {exc}")
 
             for idx, recommendation in enumerate(
                 recommendation_response.recommendations, start=1
             ):
-                await save_pesticide_recommendation_component(
-                    PesticideRecommendationComponent(
-                        recommendation_id=recommendation_response.id,
-                        farm_id=farm_id,
-                        crop_id=crop_id,
-                        component_type=PesticideRecommendationComponentType.RECOMMENDATION_ITEM,
-                        order=idx,
-                        recommendation=recommendation,
+                try:
+                    await save_pesticide_recommendation_component(
+                        PesticideRecommendationComponent(
+                            recommendation_id=recommendation_response.id,
+                            farm_id=farm_id,
+                            crop_id=crop_id,
+                            component_type=PesticideRecommendationComponentType.RECOMMENDATION_ITEM,
+                            order=idx,
+                            recommendation=recommendation,
+                        )
                     )
-                )
-                await workflow.emit_chunk(
-                    step="persist_recommendation_components",
-                    chunk_type="pesticide_item_ready",
-                    data={
-                        "pesticide_id": recommendation.id,
-                        "pesticide_name": recommendation.pesticide_name,
-                        "pesticide_type": recommendation.pesticide_type.value,
-                        "rank": recommendation.rank,
-                    },
-                )
 
-            await workflow.complete_step("persist_recommendation_components")
+                    pesticide_type_value = (
+                        recommendation.pesticide_type.value
+                        if isinstance(recommendation.pesticide_type, PesticideType)
+                        else str(recommendation.pesticide_type)
+                    )
+
+                    await workflow.emit_chunk(
+                        step="persist_recommendation_components",
+                        chunk_type="pesticide_item_ready",
+                        data={
+                            "pesticide_id": recommendation.id,
+                            "pesticide_name": recommendation.pesticide_name,
+                            "pesticide_type": pesticide_type_value,
+                            "rank": recommendation.rank,
+                        },
+                    )
+                except Exception as exc:
+                    logger.exception(
+                        "Failed persisting pesticide recommendation item index=%s recommendation_id=%s",
+                        idx,
+                        recommendation_response.id,
+                    )
+                    component_persist_warnings.append(
+                        f"item_{idx}_persist_failed: {exc}"
+                    )
+
+            await workflow.complete_step(
+                "persist_recommendation_components",
+                {
+                    "warning_count": len(component_persist_warnings),
+                    "warnings": component_persist_warnings[:5],
+                },
+            )
             await workflow.start_step("save_final_recommendation")
             await save_pesticide_recommendation(recommendation_response)
             await workflow.complete_step(
@@ -312,19 +425,23 @@ async def pesticide_recommendation(
             payload={"status_code": exc.status_code},
         )
         raise
-    except Exception:
+    except Exception as exc:
+        error_message = (
+            "Internal server error in pesticide recommendation: "
+            f"{exc.__class__.__name__}: {str(exc)}"
+        )
         logger.exception(
             "Unexpected pesticide recommendation failure for crop_id=%s farm_id=%s",
             crop_id,
             farm_id,
         )
         await workflow.fail(
-            error_message="Internal server error in pesticide recommendation",
+            error_message=error_message,
             step=workflow.current_step,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error in pesticide recommendation",
+            detail=error_message,
         )
     finally:
         await _cleanup_pesticide_input_blobs(files)
